@@ -1,0 +1,186 @@
+library(xtable)
+library(tidyverse)
+library(geigen)
+library(MASS)
+library(conicfit)
+
+# Generate ellipse data using calculateEllipse from conicfit package. Input center coordinates (xc,yc), major and minor axes (a,b),
+#  tilt angle (psi) number of equidistant points around ellipse (n), and sector over which to generate points (sect). See calculateEllipse documentation for more details.
+GenerateData<-function(xc,yc,a,b,psi,n,sect){
+  XYTrue<-calculateEllipse(x=xc,y=yc,a=a,b=b,angle=psi*180/pi,sector=sect,steps=n)
+  return(XYTrue)
+}
+
+# Add noise to ellipse data. Pass true ellipse points (XYTrue) in the form of a 2d array and noise level (sigma).
+Noise<-function(XYTrue,sigma){
+  n<-nrow(XYTrue)
+  errx<-as.matrix(rnorm(n,mean=0,sd=sigma))
+  erry<-as.matrix(rnorm(n,mean=0,sd=sigma))
+  XY<-matrix(0,nrow=n,ncol=2)
+  XY[,1]<-XYTrue[,1]+errx;XY[,2]<-XYTrue[,2]+erry
+  return(XY)
+}
+
+# Construct the matrices Z, M, and V used for Taubin's Method. Pass ellipse points (XY) as a 2d array.
+FormZMV<-function(XY){
+  n<-nrow(XY)
+  Z<-matrix(0,nrow=n,ncol=6)
+  M<-array(0,dim=c(6,6,n))
+  V<-array(0,dim=c(6,6,n))
+  for (i in 1:n){
+    Z[i,]<-as.matrix(cbind(XY[i,1]**2,2*XY[i,1]*XY[i,2],XY[i,2]**2,2*XY[i,1],2*XY[i,2],1))
+    M[,,i]<-as.matrix(Z[i,])%*%t(as.matrix(Z[i,]))
+    V[,,i]<-4*matrix(c(XY[i,1]**2,XY[i,1]*XY[i,2],0,XY[i,1],0,0,
+                     XY[i,1]*XY[i,2],XY[i,1]**2+XY[i,2]**2,XY[i,1]*XY[i,2],XY[i,2],XY[i,1],0,
+                     0,XY[i,1]*XY[i,2],XY[i,2]**2,0,XY[i,2],0,
+                     XY[i,1],XY[i,2],0,1,0,0,
+                     0,XY[i,1],XY[i,2],0,1,0,
+                     0,0,0,0,0,0),nrow=6,ncol=6)
+  }
+  return(list('Z'=Z,'M'=M,'V'=V))
+}
+
+
+# Construct the matrix N used for Taubin's method. Pass ellipse points (XY) as a 2d array.
+FormNtaub<-function(XY){
+  n<-nrow(XY)
+  Ntaub<-matrix(0,nrow=6,ncol=6)
+  for (i in 1:n){
+    Ntaub<-Ntaub+matrix(c(XY[i,1]**2,XY[i,1]*XY[i,2],0,XY[i,1],0,0,
+               XY[i,1]*XY[i,2],XY[i,1]**2+XY[i,2]**2,XY[i,1]*XY[i,2],XY[i,2],XY[i,1],0,
+               0,XY[i,1]*XY[i,2],XY[i,2]**2,0,XY[i,2],0,
+               XY[i,1],XY[i,2],0,1,0,0,
+               0,XY[i,1],XY[i,2],0,1,0,
+               0,0,0,0,0,0),nrow=6,ncol=6)
+  }
+  Ntaub<-Ntaub*(1/n)
+  return(Ntaub)
+}
+
+# Construct Taubin Estimator for single ellipse estimation. Pass ellipse points (XY) as a 2d array.
+Taubin<-function(XY){
+  n<-nrow(XY)
+  ptm<-proc.time()
+  Ntaub<-FormNtaub(XY)
+  Z<-FormZMV(XY)$Z
+  M<-t(Z)%*%Z*(1/n)
+  values<-geigen(Ntaub,M)$values
+  vectors<-geigen(Ntaub,M)$vectors
+  I<-which(abs(values)==max(abs(values)))
+  A<-vectors[,I]
+  A<-A/sqrt(sum(A**2))
+  A<-as.vector(cbind(A[1],2*A[2],A[3],2*A[4],2*A[5],A[6]))
+
+  time<-proc.time()-ptm
+  iter=1
+  outlist=list('A'=A,'time'=time,'iter'=iter)
+  return(outlist)
+}
+
+# Construct GRAF estimator. Pass initial estimate (A) as a 1d array, ellipse 1 and ellipse 2 points (XY1, XY2) as 2d arrays.
+FGRAF<-function(A,XY1,XY2){
+  n1<-nrow(XY1)
+  n2<-nrow(XY2)
+  X1<-XY1[1:n1,1]; Y1<-XY1[1:n1,2]
+  X2<-XY2[1:n2,1]; Y2<-XY2[1:n2,2]
+
+  T11<-((X1-A[1])*cos(A[5])+(Y1-A[2])*sin(A[5]))
+  T12<-(-(X1-A[1])*sin(A[5])+(Y1-A[2])*cos(A[5]))
+  T21<-((X2-A[1])*cos(A[8])+(Y2-A[2])*sin(A[8]))
+  T22<-(-(X2-A[1])*sin(A[8])+(Y2-A[2])*cos(A[8]))
+
+  P1<-(T11^2)*A[3]+(T12^2)*A[4]-1 ; P2<-(T21^2)*A[6]+(T22^2)*A[7]-1
+  W1<-T11^2*A[3]^2 + T12^2*A[4]^2 ; W2<-T21^2*A[6]^2 + T22^2*A[7]^2
+
+  return(.25*sum(P1^2/W1) + .25*sum(P2^2/W2))
+}
+
+# Construct LS estimator. Pass initial estimate (A) as a 1d array, ellipse 1 and ellipse 2 points (XY1, XY2) as 2d arrays.
+FLS<-function(A,XY1,XY2){
+  n1<-nrow(XY1)
+  n2<-nrow(XY2)
+  X1<-XY1[1:n1,1]; Y1<-XY1[1:n1,2]
+  X2<-XY2[1:n2,1]; Y2<-XY2[1:n2,2]
+
+  T11<-((X1-A[1])*cos(A[5])+(Y1-A[2])*sin(A[5]))
+  T12<-(-(X1-A[1])*sin(A[5])+(Y1-A[2])*cos(A[5]))
+  T21<-((X2-A[1])*cos(A[8])+(Y2-A[2])*sin(A[8]))
+  T22<-(-(X2-A[1])*sin(A[8])+(Y2-A[2])*cos(A[8]))
+
+  P1<-(T11^2)*A[3]+(T12^2)*A[4]-1 ; P2<-(T21^2)*A[6]+(T22^2)*A[7]-1
+
+  return(sum(P1^2) + sum(P2^2))
+}
+
+
+
+# Compute Constrained Cramer-Rao bound. Pass true ellipse parameters (ATrue), and true ellipse points (XYT1 and XYT2).
+CCRB<-function(ATrue,XYT1,XYT2){
+  n1<-nrow(XYT1)
+  n2<-nrow(XYT2)
+  AT<-ATrue
+  z1j<-matrix(0,nrow=n1,ncol=2)
+  z2j<-matrix(0,nrow=n2,ncol=2)
+
+  w1j<-matrix(0,nrow=n1,ncol=1)
+  w2j<-matrix(0,nrow=n2,ncol=1)
+
+  Q11<-matrix(0,nrow=n1,ncol=2)
+  Q21<-matrix(0,nrow=n2,ncol=2)
+
+  Q12<-matrix(0,nrow=n1,ncol=3)
+  Q22<-matrix(0,nrow=n2,ncol=3)
+
+
+  for(i in 1:n1){
+    X1<-XYT1[1:n1,1]; Y1<-XYT1[1:n1,2]
+
+    T11<-((X1-AT[1])*cos(AT[5])+(Y1-AT[2])*sin(AT[5]))
+    T12<-(-(X1-AT[1])*sin(AT[5])+(Y1-AT[2])*cos(AT[5]))
+
+    z1j[i,1]<-T11[i]*AT[3]*cos(AT[5])-T12[i]*AT[4]*sin(AT[5])
+    z1j[i,2]<-T11[i]*AT[3]*sin(AT[5])+T12[i]*AT[4]*cos(AT[5])
+
+    w1j[i]<-sum((z1j[i,])^2)
+
+    Q11[i,]<- -w1j[i]^(-.5)*z1j[i,]
+
+    Q12[i,1]<-.5*w1j[i]^(-.5)*T11[i]^2
+    Q12[i,2]<-.5*w1j[i]^(-.5)*T12[i]^2
+    Q12[i,3]<-w1j[i]^(-.5)*T11[i]*T12[i]*(AT[3]-AT[4])
+  }
+
+
+  for(i in 1:n2){
+    X2<-XYT2[1:n2,1]; Y2<-XYT2[1:n2,2]
+
+    T21<-((X2-AT[1])*cos(AT[8])+(Y2-AT[2])*sin(AT[8]))
+    T22<-(-(X2-AT[1])*sin(AT[8])+(Y2-AT[2])*cos(AT[8]))
+
+    z2j[i,1]<-T21[i]*AT[6]*cos(AT[8])-T22[i]*AT[7]*sin(AT[8])
+    z2j[i,2]<-T21[i]*AT[6]*sin(AT[8])+T22[i]*AT[7]*cos(AT[8])
+
+    w2j[i]<-sum((z2j[i,])^2)
+
+    Q21[i,]<- -w2j[i]^(-.5)*z2j[i,]
+
+    Q22[i,1]<-.5*w2j[i]^(-.5)*T21[i]^2
+    Q22[i,2]<-.5*w2j[i]^(-.5)*T22[i]^2
+    Q22[i,3]<-w2j[i]^(-.5)*T21[i]*T22[i]*(AT[6]-AT[7])
+  }
+
+  Q1<-cbind(Q11,Q12,matrix(0,nrow=n1,ncol=3))
+  Q2<-cbind(Q21,matrix(0,nrow=n2,ncol=3),Q22)
+  Q<-rbind(Q1,Q2)
+
+  ccrb<-solve(t(Q)%*%Q)
+  return(ccrb)
+
+}
+
+# Compute MSE (mod pi for angles). Pass true parameter vector and estimate as 1d arrays.
+MSE<-function(ATrue,AHat){
+  err<- AHat-ATrue
+  err[c(5,8)]<-(err[c(5,8)]+1)%%pi-1
+  return(sum(err^2))
+}

@@ -1,0 +1,114 @@
+# The codes in this file are used to generate Figure 2.
+
+# Initialize parameter values.
+xc<-0; yc<-0; a1<-2; b1<-1; a2<-3; b2<-2; psi1<-0; psi2<-pi/4
+n1<-20; n2<-35; n<-n1+n2
+sect<-c(0,240)
+
+ATrue<-matrix(c(xc,yc,1/a1**2,1/b1**2,psi1,1/a2**2,1/b2**2,psi2))
+
+# Define sigma range
+sigma<-c(.01,.03,.05,.07,.09,.11)
+
+# Generate Data.
+XYT1<-GenerateData(xc,yc,a1,b1,psi1,n1,sect)
+XYT2<-GenerateData(xc,yc,a2,b2,psi2,n2,sect)
+
+
+Time<-array(0,dim=c(3,length(sigma),2))
+Iterations<-array(0,dim=c(3,length(sigma),2))
+Divergence<-array(0,dim=c(3,length(sigma),2))
+
+# For 2000 iterations, count number of times each method diverges and the time till convergence when converged.
+b<-2000
+eps=1e-7
+for( j in 1:length(sigma)){
+  average_div_BFGS<-0
+  average_div_NM<-0
+
+  BFGS_div<-0
+  NM_div<-0
+
+  average_k_BFGS<-0
+  average_k_NM<-0
+
+  average_t_BFGS<-0
+  average_t_NM<-0
+
+  for(i in 1:b ){
+    XY1<-Noise(XYTrue=XYT1,sigma=sigma[j])
+    XY2<-Noise(XYTrue=XYT2,sigma=sigma[j])
+    X1<-XY1[1:n1,1]
+    Y1<-XY1[1:n1,2]
+    X2<-XY2[1:n2,1]
+    Y2<-XY2[1:n2,2]
+
+    T1 <- Taubin(XY1)$A
+    T2 <- Taubin(XY2)$A
+    A1 <- as.numeric(unlist(AtoG(T1)))
+    A2 <- as.numeric(unlist(AtoG(T2)))
+
+    average<-matrix(c((A1[1]+A2[1])/2,(A1[2]+A2[2])/2,1/A1[3]**2,1/A1[4]**2,A1[5],1/A2[3]**2,1/A2[4]**2,A2[5]),nrow=8)
+
+    average_time_start_BFGS<-Sys.time()
+    BFGS_average<-optim(average,FGRAF,XY1=XY1,XY2=XY2,control=list(reltol=eps,maxit=3000),hessian = FALSE,method= 'BFGS')
+    average_time_end_BFGS<-Sys.time()
+    average_time_BFGS<-as.numeric(average_time_end_BFGS-average_time_start_BFGS)
+
+    ###############################
+
+    average_time_start_NM<-Sys.time()
+    NM_average<-optim(average,FGRAF,XY1=XY1,XY2=XY2,control=list(reltol=eps,maxit=3000),hessian = FALSE,method= 'Nelder-Mead')
+    average_time_end_NM<-Sys.time()
+    average_time_NM<-as.numeric(average_time_end_NM-average_time_start_NM)
+
+    #################################
+
+
+    average_div_BFGS<-average_div_BFGS+BFGS_average$convergence
+    average_div_NM<-average_div_NM+NM_average$convergence
+
+
+    if(BFGS_average$convergence!=0 ){
+      BFGS_div<-BFGS_div+1
+    }
+    else{
+      average_k_BFGS<-average_k_BFGS+BFGS_average$counts[1]
+      average_t_BFGS <- average_t_BFGS+average_time_BFGS
+    }
+
+    ######################################
+    #################################
+
+    if(NM_average$convergence !=0 ){
+      NM_div<-NM_div+1
+    }
+    else{
+
+      average_k_NM<-average_k_NM+NM_average$counts[1]
+      average_t_NM <- average_t_NM+average_time_NM
+    }
+
+  }
+
+
+  Divergence[3,j,1]<-average_div_BFGS/b
+  Time[3,j,1]<-average_t_BFGS/(b-BFGS_div)
+
+  Divergence[3,j,2]<-average_div_NM/b
+  Time[3,j,2]<-average_t_NM/(b-NM_div)
+}
+
+
+# Plot results for Figure 2
+# Divergence Rate
+par(mfrow=c(1,1),font.axis=2,cex.lab=2.5,cex.main=2.5,mar=c(4,6,4,2))
+plot(sigma,Divergence[3,1:length(sigma),1],col='black',main=bquote(bold(rho*'=240'*'\u00B0')),lwd=5,type='l',lty='solid',xlim=c(.013,.0975),ylim=c(0,.1),ylab=bquote(bold('Divergence Rate')),
+     xlab='',cex.axis=1.8)
+lines(sigma,Divergence[3,1:length(sigma),2],col='black',lty='longdash',lwd=5)
+legend('topleft',legend=c(bquote(bold('BFGS')),bquote(bold('Nelder-Mead'))),col=c('black','black'),lty=c('solid','longdash'),cex=2)
+# Time till convergence
+plot(sigma,Time[3,1:length(sigma),1],col='black',lwd=5,type='l',main='',lty='solid',xlim=c(.013,.0975),ylim=c(0,.1),ylab=bquote(bold('ART')),
+     xlab=expression(bold(sigma)),cex.axis=1.8)
+lines(sigma,Time[3,1:length(sigma),2],col='black',lty='longdash',lwd=3)
+# legend('topleft',legend=c(bquote(bold('BFGS')),bquote(bold('Nelder-Mead'))),col=c('black','black'),lty=c('solid','longdash'),cex=2)

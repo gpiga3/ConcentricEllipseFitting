@@ -1,0 +1,21 @@
+# Set parameter values to generate ellipse data
+# Ellipse 1 params:
+n1<-30; a1<-2; b1<-1; psi1<-0
+
+# Ellipse 2 params:
+n2<-45; a2<-3; b2<-2; psi2<-pi/4
+
+# Center:
+xc=0; yc=0
+
+# Sector to generate points over:
+sect<-c(0,180)
+
+# Generate points on true ellipse:
+XYT1<-GenerateData(xc,yc,a1,b1,psi1,n1,sect)
+XYT2<-GenerateData(xc,yc,a2,b2,psi2,n2,sect)
+
+# Add noise to ellipse points:
+sigma=.01
+XY1<-Noise(XYTrue=XYT1,sigma=sigma)
+XY2<-Noise(XYTrue=XYT2,sigma=sigma)

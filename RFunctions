@@ -3,7 +3,7 @@ library(tidyverse)
 library(geigen)
 library(MASS)
 library(conicfit)
-
+ 
 # Generate ellipse data using calculateEllipse from conicfit package. Input center coordinates (xc,yc), major and minor axes (a,b),
 #  tilt angle (psi) number of equidistant points around ellipse (n), and sector over which to generate points (sect). See calculateEllipse documentation for more details.
 GenerateData<-function(xc,yc,a,b,psi,n,sect){

@@ -31,7 +31,8 @@ A1 <- as.numeric(unlist(AtoG(T1)))
 A2 <- as.numeric(unlist(AtoG(T2)))
 Init<-matrix(c((A1[1]+A2[1])/2,(A1[2]+A2[2])/2,1/A1[3]**2,1/A1[4]**2,A1[5],1/A2[3]**2,1/A2[4]**2,A2[5]),nrow=8)
 
-# Use optim function to obtain LS and GRAF estimates. Define convergence criteria with eps and set optimization method.
+# Use optim function to obtain LS and GRAF estimates. Define convergence criteria with eps and set optimization method. FLS and FGRAF passed
+# to optim are the functions from the RFunctions file.
 eps=1e-7
 BFGS_LS<-optim(Init,FLS,XY1=XY1,XY2=XY2,method='BFGS',control=list(reltol=eps,maxit=3000))
 Ahat_LS<-BFGS_LS$par

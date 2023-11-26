@@ -1,4 +1,4 @@
-# The codes in this file are used to generate Figure 2.
+# The codes in this file are used to generate Figure 2 from "Fitting Concentric Elliptical Shapes Under General Model", by Ali Al-Sharadqah and Giuliano Piga.
 
 # Initialize parameter values.
 xc<-0; yc<-0; a1<-2; b1<-1; a2<-3; b2<-2; psi1<-0; psi2<-pi/4

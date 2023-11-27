@@ -16,7 +16,6 @@ XYT2<-GenerateData(xc,yc,a2,b2,psi2,n2,sect)
 
 
 Time<-array(0,dim=c(3,length(sigma),2))
-Iterations<-array(0,dim=c(3,length(sigma),2))
 Divergence<-array(0,dim=c(3,length(sigma),2))
 
 # For 2000 iterations, count number of times each method diverges and the time till convergence when converged.
@@ -28,9 +27,6 @@ for( j in 1:length(sigma)){
 
   BFGS_div<-0
   NM_div<-0
-
-  average_k_BFGS<-0
-  average_k_NM<-0
 
   average_t_BFGS<-0
   average_t_NM<-0
@@ -73,7 +69,6 @@ for( j in 1:length(sigma)){
       BFGS_div<-BFGS_div+1
     }
     else{
-      average_k_BFGS<-average_k_BFGS+BFGS_average$counts[1]
       average_t_BFGS <- average_t_BFGS+average_time_BFGS
     }
 
@@ -85,7 +80,6 @@ for( j in 1:length(sigma)){
     }
     else{
 
-      average_k_NM<-average_k_NM+NM_average$counts[1]
       average_t_NM <- average_t_NM+average_time_NM
     }
 

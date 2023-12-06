@@ -65,11 +65,10 @@ for(j in 1:length(sigma)){
 }
 # Plot Results for Figure 3.
 par(mfrow=c(1,1),font.axis=2,cex.lab=2.5,cex.main=2.5,mar=c(4,6,4,2))
-plot(sigma,colMeans(MSE_LS)/sigma^2,type='l',main=bquote(bold(rho*'=180'*'\u00B0')),col='black',ylab='',
-     xlab=expression(bold(sigma)),lwd=5,lty='longdash',xlim=c(sigma[1]*1.3,.039),ylim=c(sum(diag(CCRB(ATrue,XYT1,XYT2)))-.04,18),cex.axis=1.8)
-lines(sigma,colMeans(MSE_GRAF)/sigma^2,type='l',col='black',lwd=5)
-lines(sigma,colMeans(MSE_INIT)/sigma^2,type='l',col='black',lwd=5,lty='dotdash')
-lines(sigma,rep(sum(diag(CCRB(ATrue,XYT1,XYT2))),length(sigma)),type='l',col='black',lwd=5,lty='dotted')
-legend('topleft',legend=c(bquote(bold('CCRB')),bquote(bold('LS')),bquote(bold('GRAF')),bquote(bold('Initial'))),col=c('black','black','black','black'),lty=c('dotted','longdash','solid','dotdash'),cex=2)
-
+plot(sigma,colMeans(MSE_LS)/sigma^2,type='l',main=bquote(bold(rho*'=300'*'\u00B0')),col='blue',ylab='',
+     xlab=expression(bold(sigma)),lwd=5,lty='solid',xlim=c(sigma[1]*1.3,.09),ylim=c(sum(diag(CCRB(ATrue,XYT1,XYT2)))-.05,1),cex.axis=1.8)
+lines(sigma,colMeans(MSE_GRAF)/sigma^2,type='l',col='orange',lwd=5,lty='solid')
+lines(sigma,colMeans(MSE_INIT)/sigma^2,type='l',col='red',lwd=5,lty='solid')
+lines(sigma,rep(sum(diag(CCRB(ATrue,XYT1,XYT2))),length(sigma)),type='l',col='black',lwd=5,lty='dashed')
+legend('topleft',legend=c(bquote(bold('CCRB')),bquote(bold('LS')),bquote(bold('GRAF')),bquote(bold('Initial'))),col=c('black','blue','orange','red'),lty=c('dashed','solid','solid','solid'),lwd=5,cex=2)
 

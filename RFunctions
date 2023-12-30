@@ -3,7 +3,7 @@ library(tidyverse)
 library(geigen)
 library(MASS)
 library(conicfit)
- 
+
 # Generate ellipse data using calculateEllipse from conicfit package. Input center coordinates (xc,yc), major and minor axes (a,b),
 #  tilt angle (psi) number of equidistant points around ellipse (n), and sector over which to generate points (sect). See calculateEllipse documentation for more details.
 GenerateData<-function(xc,yc,a,b,psi,n,sect){
@@ -184,3 +184,380 @@ MSE<-function(ATrue,AHat){
   err[c(5,8)]<-(err[c(5,8)]+1)%%pi-1
   return(sum(err^2))
 }
+
+
+Bias<-function(A,XY1,XY2,method,sigma){
+  Sym<-function(M){
+    return((M+t(M))/2)
+  }
+  At<-A
+  n1<-nrow(XY1)
+  n2<-nrow(XY2)
+  n<-n1+n2
+  X1<-XY1[1:n1,1]
+  Y1<-XY1[1:n1,2]
+  X2<-XY2[1:n2,1]
+  Y2<-XY2[1:n2,2]
+  T11<-((X1-A[1])*cos(A[5])+(Y1-A[2])*sin(A[5]))
+  T12<-(-(X1-A[1])*sin(A[5])+(Y1-A[2])*cos(A[5]))
+  T21<-((X2-A[1])*cos(A[8])+(Y2-A[2])*sin(A[8]))
+  T22<-(-(X2-A[1])*sin(A[8])+(Y2-A[2])*cos(A[8]))
+
+  s1<-sin(A[5]); s2<-sin(A[8])
+  c1<-cos(A[5]); c2<-cos(A[8])
+
+
+  if(method=='LS'){
+    Q<-matrix(0,nrow=n,ncol=8)
+
+    for(i in 1:n1){
+
+      Q[i,]<- c(-T11[i]*At[3]*c1 + T12[i]*At[4]*s1,-T11[i]*At[3]*s1 - T12[i]*At[4]*c1 , .5*T11[i]^2, .5*T12[i]^2, -T11[i]*T12[i]*At[4]+T11[i]*T12[i]*At[3],0,0,0)
+
+    }
+
+    for(i in 1:n2){
+
+      Q[n1+i,]<- c(-T21[i]*At[6]*c2 + T22[i]*At[7]*s2,-T21[i]*At[6]*s2 - T22[i]*At[7]*c2 ,0,0,0, .5*T21[i]^2, .5*T22[i]^2, -T21[i]*T22[i]*At[7]+T21[i]*T22[i]*At[6])
+
+    }
+
+    Z<-matrix(0,nrow=n,ncol=2*n)
+    for(i in 1:n1){
+
+      Z[i,(2*i-1):(2*i)]<-c(T11[i]*At[3]*c1 - T12[i]*At[4]*s1, T11[i]*At[3]*s1 + T12[i]*At[4]*c1 )
+
+    }
+
+    for(i in 1:n2){
+
+      Z[n1+i,(2*n1+2*i-1):(2*n1+2*i)]<-c(T21[i]*At[6]*c2 - T22[i]*At[7]*s2, T21[i]*At[6]*s2 + T22[i]*At[7]*c2 )
+
+    }
+
+
+    bias<-0
+    for(i in 1:n1){
+      l<-matrix(c(c1,s1),nrow=2)
+
+      lp<-matrix(c(-s1,c1),nrow=2)
+
+      tau<-matrix(c(-t(l),0,0,T12[i],0,0,0),nrow=8)
+
+      taup<-matrix(c(-t(lp),0,0,-T11[i],0,0,0),nrow=8)
+
+      u<-matrix(c(0,0,0,0,1,0,0,0),nrow=8)
+
+      a<-matrix(c(0,0,2*T11[i],0,0,0,0,0),nrow=8)
+
+      ap<-matrix(c(0,0,0,2*T12[i],0,0,0,0),nrow=8)
+
+      gij<-as.numeric(T11[i]*At[3])*u%*%t(lp)-as.numeric(T12[i]*At[4])*u%*%t(l)+At[3]*tau%*%t(l)+At[4]*taup%*%t(lp)+.5*a%*%t(l)+.5*ap%*%t(lp)
+
+      Gij<-.5*(u%*%t(u)+2*T11[i]*At[3]*u%*%t(taup)-2*T12[i]*At[4]*u%*%t(tau)+At[3]*tau%*%t(tau)+At[4]*taup%*%t(taup)+a%*%t(tau)+ap%*%t(taup))
+
+      nu<-.5*(At[3]*l%*%t(l)+At[4]*lp%*%t(lp))
+
+      E<-matrix(0,nrow=2,ncol=2*n)
+
+      E[1,2*i-1]<-1
+
+      E[2,2*i]<-1
+
+
+      bias<- bias + matrix(Q[i,])*(sum(diag(nu)) - sum(diag(Sym(t(Z)%*%Q%*%solve(t(Q)%*%Q)%*%gij%*%E))) + sum(diag(Sym(t(Z)%*%Q%*%solve(t(Q)%*%Q)%*%Gij%*%solve(t(Q)%*%Q)%*%t(Q)%*%Z))) )
+    }
+    for(i in 1:n2){
+      l<-matrix(c(c2,s2),nrow=2)
+
+      lp<-matrix(c(-s2,c2),nrow=2)
+
+      tau<-matrix(c(-t(l),0,0,0,0,0,T22[i]),nrow=8)
+
+      taup<-matrix(c(-t(lp),0,0,0,0,0,-T21[i]),nrow=8)
+
+      u<-matrix(c(0,0,0,0,0,0,0,1),nrow=8)
+
+      a<-matrix(c(0,0,0,0,0,2*T21[i],0,0),nrow=8)
+
+      ap<-matrix(c(0,0,0,0,0,0,2*T22[i],0),nrow=8)
+
+      gij<-as.numeric(T21[i]*At[6])*u%*%t(lp)-as.numeric(T22[i]*At[7])*u%*%t(l)+At[6]*tau%*%t(l)+At[7]*taup%*%t(lp)+.5*a%*%t(l)+.5*ap%*%t(lp)
+
+
+      Gij<-.5*(u%*%t(u)+2*T21[i]*At[6]*u%*%t(taup)-2*T22[i]*At[7]*u%*%t(tau)+At[6]*tau%*%t(tau)+At[7]*taup%*%t(taup)+a%*%t(tau)+ap%*%t(taup))
+
+      nu<-.5*(At[6]*l%*%t(l)+At[7]*lp%*%t(lp))
+
+      E<-matrix(0,nrow=2,ncol=2*n)
+
+      E[1,2*n1+2*i-1]<-1
+
+      E[2,2*n1+2*i]<-1
+
+      bias<- bias + matrix(Q[n1+i,])*(sum(diag(nu)) - sum(diag(Sym(t(Z)%*%Q%*%solve(t(Q)%*%Q)%*%gij%*%E))) + sum(diag(Sym(t(Z)%*%Q%*%solve(t(Q)%*%Q)%*%Gij%*%solve(t(Q)%*%Q)%*%t(Q)%*%Z))) )
+
+    }
+    return(-(sigma^2)*solve(t(Q)%*%Q)%*%bias)
+  }
+
+  ######################################################################################
+  if(method=='GRAF'){
+    Q<-matrix(0,nrow=n,ncol=8)
+
+    for(i in 1:n1){
+
+      Q[i,]<- c(-T11[i]*At[3]*c1 + T12[i]*At[4]*s1,-T11[i]*At[3]*s1 - T12[i]*At[4]*c1 , .5*T11[i]^2, .5*T12[i]^2, -T11[i]*T12[i]*At[4]+T11[i]*T12[i]*At[3],0,0,0)
+
+    }
+
+    for(i in 1:n2){
+
+      Q[n1+i,]<- c(-T21[i]*At[6]*c2 + T22[i]*At[7]*s2,-T21[i]*At[6]*s2 - T22[i]*At[7]*c2 ,0,0,0, .5*T21[i]^2, .5*T22[i]^2, -T21[i]*T22[i]*At[7]+T21[i]*T22[i]*At[6])
+
+    }
+
+    Z<-matrix(0,nrow=n,ncol=2*n)
+    for(i in 1:n1){
+
+      Z[i,(2*i-1):(2*i)]<-c(T11[i]*At[3]*c1 - T12[i]*At[4]*s1, T11[i]*At[3]*s1 + T12[i]*At[4]*c1 )
+
+    }
+
+    for(i in 1:n2){
+
+      Z[n1+i,(2*n1+2*i-1):(2*n1+2*i)]<-c(T21[i]*At[6]*c2 - T22[i]*At[7]*s2, T21[i]*At[6]*s2 + T22[i]*At[7]*c2 )
+
+    }
+
+
+
+    w<- matrix(0,nrow=n)
+    for(i in 1:n1){
+      w[i]<-At[3]^2*T11[i]^2+At[4]^2*T12[i]^2
+    }
+    for(i in 1:n2){
+      w[n1+i]<-At[6]^2*T21[i]^2+At[7]^2*T22[i]^2
+    }
+
+    Qw<-matrix(0,nrow=n,ncol=8)
+
+    for(i in 1:n1){
+
+      Qw[i,]<- w[i]^(-.5)*c(-T11[i]*At[3]*c1 + T12[i]*At[4]*s1,-T11[i]*At[3]*s1 - T12[i]*At[4]*c1 , .5*T11[i]^2, .5*T12[i]^2, -T11[i]*T12[i]*At[4]+T11[i]*T12[i]*At[3],0,0,0)
+
+    }
+
+    for(i in 1:n2){
+
+      Qw[n1+i,]<- w[n1+i]^(-.5)*c(-T21[i]*At[6]*c2 + T22[i]*At[7]*s2,-T21[i]*At[6]*s2 - T22[i]*At[7]*c2 ,0,0,0, .5*T21[i]^2, .5*T22[i]^2, -T21[i]*T22[i]*At[7]+T21[i]*T22[i]*At[6])
+
+    }
+
+    Zw<-matrix(0,nrow=n,ncol=2*n)
+    for(i in 1:n1){
+
+      Zw[i,(2*i-1):(2*i)]<-w[i]^(-.5)*c(T11[i]*At[3]*c1 - T12[i]*At[4]*s1, T11[i]*At[3]*s1 + T12[i]*At[4]*c1 )
+
+    }
+
+    for(i in 1:n2){
+
+      Zw[n1+i,(2*n1+2*i-1):(2*n1+2*i)]<-w[n1+i]^(-.5)*c(T21[i]*At[6]*c2 - T22[i]*At[7]*s2, T21[i]*At[6]*s2 + T22[i]*At[7]*c2 )
+
+    }
+
+
+
+    bias<-0
+    for(i in 1:n1){
+      l<-matrix(c(c1,s1),nrow=2)
+
+      lp<-matrix(c(-s1,c1),nrow=2)
+
+      tau<-matrix(c(-t(l),0,0,T12[i],0,0,0),nrow=8)
+
+      taup<-matrix(c(-t(lp),0,0,-T11[i],0,0,0),nrow=8)
+
+      u<-matrix(c(0,0,0,0,1,0,0,0),nrow=8)
+
+      a<-matrix(c(0,0,2*T11[i],0,0,0,0,0),nrow=8)
+
+      ap<-matrix(c(0,0,0,2*T12[i],0,0,0,0),nrow=8)
+
+      gij<-as.numeric(T11[i]*At[3])*u%*%t(lp)-as.numeric(T12[i]*At[4])*u%*%t(l)+At[3]*tau%*%t(l)+At[4]*taup%*%t(lp)+.5*a%*%t(l)+.5*ap%*%t(lp)
+
+      Gij<-.5*(u%*%t(u)+2*T11[i]*At[3]*u%*%t(taup)-2*T12[i]*At[4]*u%*%t(tau)+At[3]*tau%*%t(tau)+At[4]*taup%*%t(taup)+a%*%t(tau)+ap%*%t(taup))
+
+      nu<-.5*(At[3]*l%*%t(l)+At[4]*lp%*%t(lp))
+
+      xi <- matrix(c(-T12[i]*At[4]^2*s1 + T11[i]*At[3]^2*c1,T12[i]*At[4]^2*c1 + T11[i]*At[3]^2*s1))
+
+      kij<- matrix(c(-t(xi),T11[i]^2*At[3],T12[i]^2*At[4],T11[i]*T12[i]*(At[3]^2-At[4]^2),0,0,0))
+
+      zij<-Z[i,(2*i-1):(2*i)]
+
+      E<-matrix(0,nrow=2,ncol=2*n)
+
+      E[1,2*i-1]<-1
+
+      E[2,2*i]<-1
+
+
+      J1 <- (1/w[i])*( t(matrix(Q[i,]))%*%solve(t(Qw)%*%Qw)%*%matrix(Q[i,]) - 2*t(matrix(Q[i,]))%*%solve(t(Qw)%*%Qw)%*%t(Qw)%*%Zw%*%t(E)%*%zij + t(zij)%*%zij )
+
+      J2 <- (1/w[i])*( t(matrix(Q[i,]))%*%solve(t(Qw)%*%Qw)%*%kij - t(kij)%*%solve(t(Qw)%*%Qw)%*%t(Qw)%*%Zw%*%t(E)%*%zij -  t(matrix(Q[i,]))%*%solve(t(Qw)%*%Qw)%*%t(Qw)%*%Zw%*%t(E)%*%xi + t(zij)%*%xi )
+
+      J3 <- sum(diag(nu)) - sum(diag(Sym(t(Zw)%*%Qw%*%solve(t(Qw)%*%Qw)%*%gij%*%E))) + sum(diag(Sym(t(Zw)%*%Qw%*%solve(t(Qw)%*%Qw)%*%Gij%*%solve(t(Qw)%*%Qw)%*%t(Qw)%*%Zw)))
+
+
+      bias <- bias + (1/w[i])*( -as.numeric(J1)*kij - as.numeric(J2)*matrix(Q[i,]) + as.numeric(J3)*matrix(Q[i,]))
+
+    }
+
+    for(i in 1:n2){
+      l<-matrix(c(c2,s2),nrow=2)
+
+      lp<-matrix(c(-s2,c2),nrow=2)
+
+      tau<-matrix(c(-t(l),0,0,0,0,0,T22[i]),nrow=8)
+
+      taup<-matrix(c(-t(lp),0,0,0,0,0,-T21[i]),nrow=8)
+
+      u<-matrix(c(0,0,0,0,0,0,0,1),nrow=8)
+
+      a<-matrix(c(0,0,0,0,0,2*T21[i],0,0),nrow=8)
+
+      ap<-matrix(c(0,0,0,0,0,0,2*T22[i],0),nrow=8)
+
+      gij<-as.numeric(T21[i]*At[6])*u%*%t(lp)-as.numeric(T22[i]*At[7])*u%*%t(l)+At[6]*tau%*%t(l)+At[7]*taup%*%t(lp)+.5*a%*%t(l)+.5*ap%*%t(lp)
+
+
+      Gij<-.5*(u%*%t(u)+2*T21[i]*At[6]*u%*%t(taup)-2*T22[i]*At[7]*u%*%t(tau)+At[6]*tau%*%t(tau)+At[7]*taup%*%t(taup)+a%*%t(tau)+ap%*%t(taup))
+
+      nu<-.5*(At[6]*l%*%t(l)+At[7]*lp%*%t(lp))
+
+      xi<-matrix(c(T22[i]*At[7]^2*s2 - T21[i]*At[6]^2*c2,-T22[i]*At[7]^2*c2 - T21[i]*At[6]^2*s2))
+
+      kij<- matrix(c(-t(xi),0,0,0,T21[i]^2*At[6],T22[i]^2*At[7],T21[i]*T22[i]*(At[6]^2-At[7]^2)))
+
+      zij <-  Z[n1+i,(2*n1+2*i-1):(2*n1+2*i)]
+
+      E<-matrix(0,nrow=2,ncol=2*n)
+
+      E[1,2*n1+2*i-1]<-1
+
+      E[2,2*n1+2*i]<-1
+
+      J1 <- (1/w[n1+i])*( t(matrix(Q[n1+i,]))%*%solve(t(Qw)%*%Qw)%*%matrix(Q[n1+i,]) - 2*t(matrix(Q[n1+i,]))%*%solve(t(Qw)%*%Qw)%*%t(Qw)%*%Zw%*%t(E)%*%zij + t(zij)%*%zij )
+
+      J2 <- (1/w[n1+i])*( t(matrix(Q[n1+i,]))%*%solve(t(Qw)%*%Qw)%*%kij - t(kij)%*%solve(t(Qw)%*%Qw)%*%t(Qw)%*%Zw%*%t(E)%*%zij -  t(matrix(Q[n1+i,]))%*%solve(t(Qw)%*%Qw)%*%t(Qw)%*%Zw%*%t(E)%*%xi + t(zij)%*%xi )
+
+      J3 <- sum(diag(nu)) - sum(diag(Sym(t(Zw)%*%Qw%*%solve(t(Qw)%*%Qw)%*%gij%*%E))) + sum(diag(Sym(t(Zw)%*%Qw%*%solve(t(Qw)%*%Qw)%*%Gij%*%solve(t(Qw)%*%Qw)%*%t(Qw)%*%Zw)))
+
+
+      bias <- bias + (1/w[n1+i])*( -as.numeric(J1)*kij - as.numeric(J2)*matrix(Q[n1+i,]) + as.numeric(J3)*matrix(Q[n1+i,]))
+
+    }
+    return(-(sigma^2)*solve(t(Qw)%*%Qw)%*%bias)
+
+  }
+}
+
+
+
+
+
+Sigmah<-function(A,XY1,XY2,method){
+  At<-A
+
+  n1<-nrow(XY1)
+  n2<-nrow(XY2)
+
+  X1<-XY1[1:n1,1]; Y1<-XY1[1:n1,2]
+  X2<-XY2[1:n2,1]; Y2<-XY2[1:n2,2]
+
+  T11<-((X1-At[1])*cos(At[5])+(Y1-At[2])*sin(At[5]))
+  T12<-(-(X1-At[1])*sin(At[5])+(Y1-At[2])*cos(At[5]))
+  T21<-((X2-At[1])*cos(At[8])+(Y2-At[2])*sin(At[8]))
+  T22<-(-(X2-At[1])*sin(At[8])+(Y2-At[2])*cos(At[8]))
+
+  s1<-sin(At[5]); s2<-sin(At[8])
+  c1<-cos(At[5]); c2<-cos(At[8])
+
+  Q<-matrix(0,nrow=n,ncol=8)
+
+  for(i in 1:n1){
+
+    Q[i,]<- c(-T11[i]*At[3]*c1 + T12[i]*At[4]*s1,-T11[i]*At[3]*s1 - T12[i]*At[4]*c1 , .5*T11[i]^2, .5*T12[i]^2, -T11[i]*T12[i]*At[4]+T11[i]*T12[i]*At[3],0,0,0)
+
+  }
+
+  for(i in 1:n2){
+
+    Q[n1+i,]<- c(-T21[i]*At[6]*c2 + T22[i]*At[7]*s2,-T21[i]*At[6]*s2 - T22[i]*At[7]*c2 ,0,0,0, .5*T21[i]^2, .5*T22[i]^2, -T21[i]*T22[i]*At[7]+T21[i]*T22[i]*At[6])
+
+  }
+
+  Z<-matrix(0,nrow=n,ncol=2*n)
+  for(i in 1:n1){
+
+    Z[i,(2*i-1):(2*i)]<-c(T11[i]*At[3]*c1 - T12[i]*At[4]*s1, T11[i]*At[3]*s1 + T12[i]*At[4]*c1 )
+
+  }
+
+  for(i in 1:n2){
+
+    Z[n1+i,(2*n1+2*i-1):(2*n1+2*i)]<-c(T21[i]*At[6]*c2 - T22[i]*At[7]*s2, T21[i]*At[6]*s2 + T22[i]*At[7]*c2 )
+
+  }
+
+
+  w<- matrix(0,nrow=n)
+  for(i in 1:n1){
+    w[i]<-At[3]^2*T11[i]^2+At[4]^2*T12[i]^2
+  }
+  for(i in 1:n2){
+    w[n1+i]<-At[6]^2*T21[i]^2+At[7]^2*T22[i]^2
+  }
+
+  Qw<-matrix(0,nrow=n,ncol=8)
+
+  for(i in 1:n1){
+
+    Qw[i,]<- w[i]^(-.5)*c(-T11[i]*At[3]*c1 + T12[i]*At[4]*s1,-T11[i]*At[3]*s1 - T12[i]*At[4]*c1 , .5*T11[i]^2, .5*T12[i]^2, -T11[i]*T12[i]*At[4]+T11[i]*T12[i]*At[3],0,0,0)
+
+  }
+
+  for(i in 1:n2){
+
+    Qw[n1+i,]<- w[n1+i]^(-.5)*c(-T21[i]*At[6]*c2 + T22[i]*At[7]*s2,-T21[i]*At[6]*s2 - T22[i]*At[7]*c2 ,0,0,0, .5*T21[i]^2, .5*T22[i]^2, -T21[i]*T22[i]*At[7]+T21[i]*T22[i]*At[6])
+
+  }
+
+  Zw<-matrix(0,nrow=n,ncol=2*n)
+  for(i in 1:n1){
+
+    Zw[i,(2*i-1):(2*i)]<-w[i]^(-.5)*c(T11[i]*At[3]*c1 - T12[i]*At[4]*s1, T11[i]*At[3]*s1 + T12[i]*At[4]*c1 )
+
+  }
+
+  for(i in 1:n2){
+
+    Zw[n1+i,(2*n1+2*i-1):(2*n1+2*i)]<-w[n1+i]^(-.5)*c(T21[i]*At[6]*c2 - T22[i]*At[7]*s2, T21[i]*At[6]*s2 + T22[i]*At[7]*c2 )
+
+  }
+
+  if(method=='LS'){
+    sigmahLS<-FLS(A,XY1,XY2)/(sum(diag(t(Z)%*%Z))-sum(diag(t(Z)%*%Q%*%solve(t(Q)%*%Q)%*%t(Q)%*%Z)))/4
+    return(sigmahLS)
+  }
+  if(method=='GRAF'){
+    sigmahGRAF<-FGRAF(A,XY1,XY2)/(n - sum(diag(t(Zw)%*%Qw%*%solve(t(Qw)%*%Qw)%*%t(Qw)%*%Zw)))
+    return(sigmahGRAF)
+  }
+
+}
+
+
+

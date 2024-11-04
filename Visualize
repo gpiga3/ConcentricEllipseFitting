@@ -1,13 +1,9 @@
 n1<-20; n2<-25; n<-n1+n2
 xc<-0; yc<-0; a1<-2; b1<-1; a2<-2; b2<-1; psi1<-pi/4; psi2<-pi/2
-# II
-# n1<-50; n2<-50; n<-n1+n2
-# xc<-0; yc<-0; a1<-5; b1<-1; a2<-5; b2<-3; psi1<-0; psi2<-pi/3
-
 
 
 sect<-c(0,360)
-sigma<-c(.12)
+sigma<-c(.01)
 
 At<-matrix(c(xc,yc,1/a1**2,1/b1**2,psi1,1/a2**2,1/b2**2,psi2))
 

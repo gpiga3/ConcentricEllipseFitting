@@ -1,0 +1,83 @@
+n1<-20; n2<-25; n<-n1+n2
+xc<-0; yc<-0; a1<-2; b1<-1; a2<-2; b2<-1; psi1<-pi/4; psi2<-pi/2
+# II
+# n1<-50; n2<-50; n<-n1+n2
+# xc<-0; yc<-0; a1<-5; b1<-1; a2<-5; b2<-3; psi1<-0; psi2<-pi/3
+
+
+
+sect<-c(0,360)
+sigma<-c(.12)
+
+At<-matrix(c(xc,yc,1/a1**2,1/b1**2,psi1,1/a2**2,1/b2**2,psi2))
+
+
+
+XYT1<-GenerateData(xc,yc,a1,b1,psi1,n1,sect)
+XYT2<-GenerateData(xc,yc,a2,b2,psi2,n2,sect)
+
+
+XY1<-Noise(XYTrue=XYT1,sigma=sigma)
+XY2<-Noise(XYTrue=XYT2,sigma=sigma)
+X1<-XY1[1:n1,1]
+Y1<-XY1[1:n1,2]
+X2<-XY2[1:n2,1]
+Y2<-XY2[1:n2,2]
+
+T1 <- Taubin(XY1)$A
+T2 <- Taubin(XY2)$A
+A1 <- as.numeric(unlist(AtoG(T1)))
+A2 <- as.numeric(unlist(AtoG(T2)))
+
+
+Init<-matrix(c((A1[1]+A2[1])/2,(A1[2]+A2[2])/2,1/A1[3]**2,1/A1[4]**2,A1[5],1/A2[3]**2,1/A2[4]**2,A2[5]),nrow=8)
+
+
+BFGS_LS<-optim(Init,FLS,XY1=XY1,XY2=XY2,method='BFGS',control=list(reltol=eps,maxit=3000))
+Ahat_LS<-BFGS_LS$par
+
+BFGS_GRAF<-optim(Init,FGRAF,XY1=XY1,XY2=XY2,method='BFGS',control=list(reltol=eps,maxit=3000))
+Ahat_GRAF<-BFGS_GRAF$par
+
+sigmah_LS<-Sigmah(A=Ahat_LS,XY1=XY1,XY2=XY2,method='LS')
+sigmah_GRAF<-Sigmah(A=Ahat_GRAF,XY1=XY1,XY2=XY2,method='GRAF')
+
+sigmah_LS=sigma**2
+sigmah_GRAF=sigma**2
+
+Ahat_LS_BC<-Ahat_LS-Bias(Ahat_LS,XY1,XY2,'LS',sqrt(sigmah_LS))
+Ahat_GRAF_BC<-Ahat_GRAF-Bias(Ahat_GRAF,XY1,XY2,'GRAF',sqrt(sigmah_GRAF))
+
+
+
+Ahat_LS_XY1<-GenerateData(Ahat_LS[1],Ahat_LS[2],1/sqrt(Ahat_LS[3]),1/sqrt(Ahat_LS[4]),Ahat_LS[5],1000,c(0,360))
+Ahat_LS_XY2<-GenerateData(Ahat_LS[1],Ahat_LS[2],1/sqrt(Ahat_LS[6]),1/sqrt(Ahat_LS[7]),Ahat_LS[8],1000,c(0,360))
+Ahat_LS_XY=rbind(Ahat_LS_XY1,Ahat_LS_XY2)
+
+Ahat_GRAF_XY1<-GenerateData(Ahat_GRAF[1],Ahat_GRAF[2],1/sqrt(Ahat_GRAF[3]),1/sqrt(Ahat_GRAF[4]),Ahat_GRAF[5],1000,c(0,360))
+Ahat_GRAF_XY2<-GenerateData(Ahat_GRAF[1],Ahat_GRAF[2],1/sqrt(Ahat_GRAF[6]),1/sqrt(Ahat_GRAF[7]),Ahat_GRAF[8],1000,c(0,360))
+Ahat_GRAF_XY=rbind(Ahat_GRAF_XY1,Ahat_GRAF_XY2)
+
+
+
+Ahat_LS_BC_XY1<-GenerateData(Ahat_LS_BC[1],Ahat_LS_BC[2],1/sqrt(Ahat_LS_BC[3]),1/sqrt(Ahat_LS_BC[4]),Ahat_LS_BC[5],1000,c(0,360))
+Ahat_LS_BC_XY2<-GenerateData(Ahat_LS_BC[1],Ahat_LS_BC[2],1/sqrt(Ahat_LS_BC[6]),1/sqrt(Ahat_LS_BC[7]),Ahat_LS_BC[8],1000,c(0,360))
+Ahat_LS_BC_XY=rbind(Ahat_LS_BC_XY1,Ahat_LS_BC_XY2)
+
+Ahat_GRAF_BC_XY1<-GenerateData(Ahat_GRAF_BC[1],Ahat_GRAF_BC[2],1/sqrt(Ahat_GRAF_BC[3]),1/sqrt(Ahat_GRAF_BC[4]),Ahat_GRAF_BC[5],1000,c(0,360))
+Ahat_GRAF_BC_XY2<-GenerateData(Ahat_GRAF_BC[1],Ahat_GRAF_BC[2],1/sqrt(Ahat_GRAF_BC[6]),1/sqrt(Ahat_GRAF_BC[7]),Ahat_GRAF_BC[8],1000,c(0,360))
+Ahat_GRAF_BC_XY=rbind(Ahat_GRAF_BC_XY1,Ahat_GRAF_BC_XY2)
+
+XYT=rbind(GenerateData(xc,yc,a1,b1,psi1,1000,sect),GenerateData(xc,yc,a2,b2,psi2,1000,c(0,360)))
+XY=rbind(XY1,XY2)
+
+par(xpd=TRUE)
+plot(XY[,1],XY[,2],type='p',col='black',xlim=c(-2.5,2.5),ylim=c(-2.5,5.2),xlab='x',ylab='y',cex=2,pch=16,cex.axis=2,cex.main=2,main=bquote(bold(rho*'=360'*'\u00B0')) ,cex.lab=2)
+
+lines(XYT[,1],XYT[,2],type='p',col='orange',cex=.5,pch=16)
+# plot(XYT[,1],XYT[,2],type='p',col='orange',xlim=c(-2.5,2.5),ylim=c(-2.5,2.5),xlab='x',ylab='y',cex=1.5,pch=16,cex.axis=2,cex.main=2,main='Scenario I',cex.lab=2)
+lines(Ahat_LS_BC_XY[,1],Ahat_LS_BC_XY[,2],type='p',col='darkgreen',cex=.5,pch=16)
+lines(Ahat_GRAF_BC_XY[,1],Ahat_GRAF_BC_XY[,2],type='p',col='blue',cex=.5,pch=16)
+lines(Ahat_LS_XY[,1],Ahat_LS_XY[,2],type='p',col='black',cex=.5,pch=16)
+lines(Ahat_GRAF_XY[,1],Ahat_GRAF_XY[,2],type='p',col='red',cex=.5,pch=16)
+legend('topleft',bty = 'n',legend=c(bquote(bold('True')),bquote(bold('LS')),bquote(bold('LS Bias Correction')),bquote(bold('GRAF')),bquote(bold('GRAF Bias Correction'))),col=c('orange','black','darkgreen','red','blue'),lty=c('solid','solid','solid','solid','solid'),lwd=5,cex=1.5)

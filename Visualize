@@ -1,3 +1,4 @@
+# Set params
 n1<-20; n2<-25; n<-n1+n2
 xc<-0; yc<-0; a1<-2; b1<-1; a2<-2; b2<-1; psi1<-pi/4; psi2<-pi/2
 
@@ -5,10 +6,11 @@ xc<-0; yc<-0; a1<-2; b1<-1; a2<-2; b2<-1; psi1<-pi/4; psi2<-pi/2
 sect<-c(0,360)
 sigma<-c(.01)
 
+# Define vector of true params
 At<-matrix(c(xc,yc,1/a1**2,1/b1**2,psi1,1/a2**2,1/b2**2,psi2))
 
 
-
+# Simulate noisy data
 XYT1<-GenerateData(xc,yc,a1,b1,psi1,n1,sect)
 XYT2<-GenerateData(xc,yc,a2,b2,psi2,n2,sect)
 
@@ -20,14 +22,15 @@ Y1<-XY1[1:n1,2]
 X2<-XY2[1:n2,1]
 Y2<-XY2[1:n2,2]
 
+# Get initial guess
 T1 <- Taubin(XY1)$A
 T2 <- Taubin(XY2)$A
 A1 <- as.numeric(unlist(AtoG(T1)))
 A2 <- as.numeric(unlist(AtoG(T2)))
 
-
 Init<-matrix(c((A1[1]+A2[1])/2,(A1[2]+A2[2])/2,1/A1[3]**2,1/A1[4]**2,A1[5],1/A2[3]**2,1/A2[4]**2,A2[5]),nrow=8)
 
+# Get LS and GRAF estimators
 
 BFGS_LS<-optim(Init,FLS,XY1=XY1,XY2=XY2,method='BFGS',control=list(reltol=eps,maxit=3000))
 Ahat_LS<-BFGS_LS$par
@@ -35,6 +38,7 @@ Ahat_LS<-BFGS_LS$par
 BFGS_GRAF<-optim(Init,FGRAF,XY1=XY1,XY2=XY2,method='BFGS',control=list(reltol=eps,maxit=3000))
 Ahat_GRAF<-BFGS_GRAF$par
 
+# Get bias corrected LS and GRAF
 sigmah_LS<-Sigmah(A=Ahat_LS,XY1=XY1,XY2=XY2,method='LS')
 sigmah_GRAF<-Sigmah(A=Ahat_GRAF,XY1=XY1,XY2=XY2,method='GRAF')
 
@@ -45,7 +49,7 @@ Ahat_LS_BC<-Ahat_LS-Bias(Ahat_LS,XY1,XY2,'LS',sqrt(sigmah_LS))
 Ahat_GRAF_BC<-Ahat_GRAF-Bias(Ahat_GRAF,XY1,XY2,'GRAF',sqrt(sigmah_GRAF))
 
 
-
+# Visualize
 Ahat_LS_XY1<-GenerateData(Ahat_LS[1],Ahat_LS[2],1/sqrt(Ahat_LS[3]),1/sqrt(Ahat_LS[4]),Ahat_LS[5],1000,c(0,360))
 Ahat_LS_XY2<-GenerateData(Ahat_LS[1],Ahat_LS[2],1/sqrt(Ahat_LS[6]),1/sqrt(Ahat_LS[7]),Ahat_LS[8],1000,c(0,360))
 Ahat_LS_XY=rbind(Ahat_LS_XY1,Ahat_LS_XY2)

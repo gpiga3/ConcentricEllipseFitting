@@ -561,3 +561,97 @@ Sigmah<-function(A,XY1,XY2,method){
 
 
 
+Cluster=function(data,par1,par2){
+  n<-nrow(data)
+  # Step 1: Estimate center
+
+  center<-Taubin(data)$A[1:2]
+  # ggplot()+geom_point(aes(data[,1],data[,2]))+theme_classic()+
+  # xlab('x')+ylab('y')+geom_point(aes(center[1],center[2]),col='blue',size=3)
+
+  #Step 2: Get farthest point
+  pmajor<- which((data[,1]-center[1])^2+(data[,2]-center[2])^2==max((data[,1]-center[1])^2+(data[,2]-center[2])^2))
+  # ggplot()+geom_point(aes(data[,1],data[,2]))+theme_classic()+
+  #   xlab('x')+ylab('y')+geom_point(aes(center[1],center[2]),col='blue',size=3)+
+  #   geom_point(aes(data[pmajor,1],data[pmajor,2]),col='red',size=3)
+
+  amajor<-sqrt((center[1]-data[pmajor,1])^2+(center[2]+data[pmajor,2])^2)
+
+  #Step 3: Get minor axis points
+  angle<-atan(data[pmajor,2]/data[pmajor,1])
+  pangle<-angle+90
+
+
+  pminor<-which(abs(data[,2]-tan(pangle)*data[,1])==min(abs(data[,2]-tan(pangle)*data[,1])))
+  # p<-ggplot()+geom_point(aes(data[,1],data[,2]))+theme_classic()+
+  #   xlab('x')+ylab('y')+geom_point(aes(center[1],center[2]),col='blue',size=3)+
+  #   geom_point(aes(data[pmajor,1],data[pmajor,2]),col='red',size=3)
+  aminor<-sqrt((center[1]-data[pminor,1])^2+(center[2]+data[pminor,2])^2)
+
+
+  track<-matrix(0,nrow=par1)
+  minors<-matrix(0,nrow=par1+1)
+  minors[1]<-pminor
+  for(k in 1:par1){
+    # k<-1
+    # NewData<-GenerateData(center[1],center[2],amajor,aminor,angle,1000,c(0,360))
+    A<-c(center[1],center[2],1/amajor^2,1/aminor^2,angle)
+    D<-matrix(0,nrow=n)
+    for(i in 1:(n)){
+      X<-data[i,1]
+      Y<-data[i,2]
+      T1<-((X-A[1])*cos(A[5])+(Y-A[2])*sin(A[5]))
+      T2<-(-(X-A[1])*sin(A[5])+(Y-A[2])*cos(A[5]))
+      D[i]<-(T1^2*A[3]+T2^2*A[4]-1)^2
+    }
+
+
+    XY1<-data[which(D<par2),]
+    XY2<-data[which(D>=par2),]
+
+    X1<-XY1[1:nrow(XY1),1]
+    Y1<-XY1[1:nrow(XY1),2]
+    X2<-XY2[1:nrow(XY2),1]
+    Y2<-XY2[1:nrow(XY2),2]
+
+    T1 <- Taubin(XY1)$A
+    T2 <- Taubin(XY2)$A
+    A1 <- as.numeric(unlist(AtoG(T1)))
+    A2 <- as.numeric(unlist(AtoG(T2)))
+
+    Init<-matrix(c((A1[1]+A2[1])/2,(A1[2]+A2[2])/2,1/A1[3]**2,1/A1[4]**2,A1[5],1/A2[3]**2,1/A2[4]**2,A2[5]),nrow=8)
+
+    NM<-optim(Init,FGRAF,XY1=XY1,XY2=XY2,method='BFGS',control=list(maxit=3000))
+    Ahat<-NM$par
+
+    track[k]<-FGRAF(Ahat,XY1,XY2)
+
+    minors[k+1]<-which(abs(data[,2]-tan(pangle)*data[,1])==min(abs(data[-minors[1:k],2]-tan(pangle)*data[-minors[1:k],1])))
+    # p = p +geom_point(aes_(data[minors[k],1],data[minors[k],2]),col='orange',size=3)
+    aminor<-sqrt((center[1]-data[minors[k+1],1])^2+(center[2]+data[minors[k+1],2])^2)
+  }
+
+
+
+  # track
+  choice<-which(track==min(track))
+  pminor<-minors[choice]
+  pminor<-pminor[1]
+  aminor<-sqrt((center[1]-data[pminor,1])^2+(center[2]+data[pminor,2])^2)
+
+  A<-c(center[1],center[2],1/amajor^2,1/aminor^2,angle)
+
+  D<-matrix(0,nrow=n)
+  for(i in 1:n){
+    X<-data[i,1]
+    Y<-data[i,2]
+    T1<-((X-A[1])*cos(A[5])+(Y-A[2])*sin(A[5]))
+    T2<-(-(X-A[1])*sin(A[5])+(Y-A[2])*cos(A[5]))
+    D[i]<-(T1^2*A[3]+T2^2*A[4]-1)^2
+  }
+
+  XY1<-data[which(D<par2),]
+  XY2<-data[which(D>=par2),]
+  return(list('XY1'=XY1,'XY2'=XY2))
+
+}
